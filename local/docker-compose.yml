@@ -1,0 +1,55 @@
+# Local CardioLink stack. Clone all four repos side by side:
+#   cardiolink-infra/ cardiolink-device-gateway/ cardiolink-clinician-portal/ cardiolink-shared-auth/
+# then: cd cardiolink-infra/local && docker compose up --build
+name: cardiolink
+
+networks:
+  cardiolink:
+    ipam:
+      config:
+        - subnet: 169.254.169.0/24
+
+volumes:
+  signing:
+
+services:
+  s3:
+    build: ./s3
+    ports: ["9000:9000"]
+    networks: [cardiolink]
+
+  imds:
+    build: ./fake-imds
+    networks:
+      cardiolink:
+        ipv4_address: 169.254.169.254
+
+  seed:
+    build: ./seed
+    environment:
+      S3_ENDPOINT_URL: http://s3:9000
+    volumes: ["signing:/out"]
+    depends_on: [s3]
+    restart: on-failure
+    networks: [cardiolink]
+
+  gateway:
+    build:
+      context: ../../cardiolink-device-gateway
+      additional_contexts:
+        shared-auth: ../../cardiolink-shared-auth
+    environment:
+      S3_ENDPOINT_URL: http://s3:9000
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+      AWS_DEFAULT_REGION: us-east-1
+      FIRMWARE_PUBKEY_PATH: /etc/cardiolink/firmware_signing.pub
+    volumes: ["signing:/etc/cardiolink:ro"]
+    ports: ["8080:8080"]
+    depends_on: [seed]
+    networks: [cardiolink]
+
+  portal:
+    build: ../../cardiolink-clinician-portal
+    ports: ["3000:3000"]
+    networks: [cardiolink]
