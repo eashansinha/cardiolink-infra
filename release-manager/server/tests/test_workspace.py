@@ -71,11 +71,20 @@ def test_readiness_and_rollout_require_evidence(client):
 @pytest.mark.parametrize('state', ['failed', 'pending', 'incomplete'])
 def test_exact_pinned_checks_block_readiness(client, monkeypatch, state):
     release = complete(client, plan(client))
+    # The branch has advanced since planning; checking its head would be wrong.
+    branch_head = 'b' * 40
+    with module.db() as db:
+        row = db.execute('SELECT data FROM repositories WHERE id=?', ('cardiolink-device-gateway',)).fetchone()
+        snapshot = json.loads(row['data'])
+        snapshot['sha'] = branch_head
+        snapshot['ci'] = 'passed'
+        snapshot['commits'].insert(0, {'sha': branch_head})
+        db.execute('UPDATE repositories SET data=? WHERE id=?', (json.dumps(snapshot), 'cardiolink-device-gateway'))
     observed = []
 
     def check(repo, sha):
         observed.append((repo, sha))
-        return state
+        return state if sha == SHA else 'passed'
 
     monkeypatch.setattr(module, 'fetch_checks', check)
     assert move(client, release, 'ready').status_code == 422
