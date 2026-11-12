@@ -34,7 +34,7 @@ import {
 } from "lucide-react";
 import "./style.css";
 
-type CI = "passed" | "failed" | "pending" | "unknown";
+type CI = "passed" | "failed" | "pending" | "unknown" | "incomplete";
 type Repo = {
   id: string;
   name: string;
@@ -198,6 +198,7 @@ function CIStatus({ state }: { state: CI }) {
     failed: "Checks failed",
     pending: "Checks running",
     unknown: "No conclusive checks",
+    incomplete: "Checks incomplete",
   }[state];
   return (
     <span className={`ci ${state}`}>
@@ -1591,7 +1592,7 @@ function ReleaseDetail({
                         ? "Assign an owner to continue."
                         : !release.notes.trim()
                           ? "Add release notes to continue."
-                          : "Failed or running GitHub checks block readiness."}
+                          : "Failed, running, or incomplete GitHub checks block readiness."}
                     </p>
                   </>
                 ) : release.status === "ready" ? (

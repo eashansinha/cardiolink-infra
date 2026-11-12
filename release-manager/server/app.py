@@ -87,10 +87,14 @@ def checks_state(checks, statuses):
 def fetch_checks(repo_id, sha):
     checks = github(f'{repo_id}/commits/{sha}/check-runs?per_page=100')
     status = github(f'{repo_id}/commits/{sha}/status?per_page=100')
-    # A truncated check set must not produce a green readiness gate.
+    state = checks_state(checks.get('check_runs', []), status.get('statuses', []))
+    # Preserve observed blockers even when the response is truncated.
+    if state in ('failed', 'pending'):
+        return state
+    # Incomplete coverage is different from missing CI: it cannot be acknowledged away.
     if checks.get('total_count', 0) > 100 or status.get('total_count', 0) > 100:
-        return 'unknown'
-    return checks_state(checks.get('check_runs', []), status.get('statuses', []))
+        return 'incomplete'
+    return state
 
 
 def fetch_repository(meta):
@@ -335,7 +339,7 @@ def transition(release_id: str, body: TransitionInput):
             except Exception:
                 raise HTTPException(502, 'Could not verify pinned revisions with GitHub. Try again after refreshing.')
             evidence[item['repo']] = {'sha': item['sha'], 'state': state, 'checked_at': now()}
-            if state in ('failed', 'pending'):
+            if state in ('failed', 'pending', 'incomplete'):
                 raise HTTPException(422, f"{item['repo']} has {state} checks on the pinned revision.")
         if body.status == 'released' and not body.rollout_note.strip():
             raise HTTPException(422, 'Describe the completed rollout before recording a release.')

@@ -68,7 +68,7 @@ def test_readiness_and_rollout_require_evidence(client):
     assert move(client, release, 'released').status_code == 422
 
 
-@pytest.mark.parametrize('state', ['failed', 'pending'])
+@pytest.mark.parametrize('state', ['failed', 'pending', 'incomplete'])
 def test_exact_pinned_checks_block_readiness(client, monkeypatch, state):
     release = complete(client, plan(client))
     observed = []
@@ -147,3 +147,34 @@ def test_failed_sync_preserves_snapshot_and_marks_it_stale(client, monkeypatch):
     result = module.fetch_repository(module.REPOS[0])
     assert result['sha'] == SHA
     assert result['error']
+
+
+@pytest.mark.parametrize('conclusion,expected', [('failure', 'failed'), ('success', 'incomplete'), (None, 'pending')])
+def test_truncated_check_runs_never_become_reviewable_unknown(monkeypatch, conclusion, expected):
+    def github(path):
+        if '/check-runs?' in path:
+            return {'total_count': 101, 'check_runs': [{'status': 'completed' if conclusion else 'in_progress', 'conclusion': conclusion}]}
+        return {'total_count': 0, 'statuses': []}
+
+    monkeypatch.setattr(module, 'github', github)
+    assert module.fetch_checks('cardiolink-device-gateway', SHA) == expected
+
+
+@pytest.mark.parametrize('state,expected', [('failure', 'failed'), ('success', 'incomplete'), ('pending', 'pending')])
+def test_truncated_statuses_never_become_reviewable_unknown(monkeypatch, state, expected):
+    def github(path):
+        if '/check-runs?' in path:
+            return {'total_count': 0, 'check_runs': []}
+        return {'total_count': 101, 'statuses': [{'state': state}]}
+
+    monkeypatch.setattr(module, 'github', github)
+    assert module.fetch_checks('cardiolink-device-gateway', SHA) == expected
+
+
+def test_newly_incomplete_ci_blocks_recording_a_ready_release(client, monkeypatch):
+    release = complete(client, plan(client))
+    release = move(client, release, 'ready').json()
+    monkeypatch.setattr(module, 'fetch_checks', lambda *_: 'incomplete')
+    response = move(client, release, 'released', rollout_note='Completed')
+    assert response.status_code == 422
+    assert client.get('/api/workspace').json()['releases'][0]['status'] == 'ready'

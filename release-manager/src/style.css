@@ -2666,6 +2666,10 @@ main {
     gap: 12px;
   }
 }
+.ci.incomplete {
+  color: #8d6d22 !important;
+}
+
 /* Readable, compact typography for day-to-day release work. */
 .brand > div > span {
   font-size: 11px;
