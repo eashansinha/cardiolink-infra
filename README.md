@@ -3,6 +3,7 @@
 Infrastructure for the CardioLink connected cardiac monitoring platform.
 
 - `terraform/` — AWS: firmware distribution bucket, clinician portal EC2 + IAM role.
+- `release-manager/` — internal release planning workspace for all five CardioLink repositories, served as a Devin App. See [setup and release workflow](release-manager/README.md).
 - `local/` — docker compose stack mirroring prod for local dev and testing:
   an S3 stand-in (moto) for the firmware bucket, an IMDS stand-in at 169.254.169.254,
   a seeder that signs and uploads a firmware image, the device gateway and the clinician portal.
